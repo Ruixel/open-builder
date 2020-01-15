@@ -41,6 +41,16 @@ bool Client::init(const ClientConfig &config, float aspect)
 
     m_texturePack = config.texturePack;
 
+    // Set up ECS 
+    m_world = ECS::World::createWorld();
+    auto drawable = m_cube.getDrawable();
+    m_cubeRenderSystem = m_world->registerSystem(new CubeRenderSystem(&m_cube,
+        m_basicShader.modelLocation));
+
+    m_testCubeEnt = m_world->create();
+    m_testCubeEnt->assign<Transform>(glm::vec3(250, 50, 250), glm::vec3(0.2, 0.2, 0.2));
+    m_testCubeEnt->assign<CubeRenderable>();
+
     // Set up the server connection
     auto peer = NetworkHost::createAsClient(LOCAL_HOST);
     if (!peer) {
@@ -295,7 +305,7 @@ void Client::render()
     m_frustum.update(projectionViewMatrix);
 
     // Render all the entities
-    auto drawable = m_cube.getDrawable();
+    /*auto drawable = m_cube.getDrawable();
     drawable.bind();
 
     for (auto &ent : m_entities) {
@@ -313,7 +323,9 @@ void Client::render()
             gl::loadUniform(m_basicShader.modelLocation, modelMatrix);
             drawable.draw();
         }
-    }
+    }*/
+
+    m_world->tick(10.f);
 
     // Render chunks
     m_chunkShader.program.bind();

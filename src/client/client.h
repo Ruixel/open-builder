@@ -6,6 +6,8 @@
 #include "gl/vertex_array.h"
 #include "maths.h"
 #include "world/chunk_mesh.h"
+#include "ecs/ECS.h"
+#include "systems/CubeRenderSystem.h"
 #include <SFML/Network/Packet.hpp>
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
@@ -109,6 +111,11 @@ class Client final : public NetworkHost {
         gl::Shader program;
         gl::UniformLocation projectionViewLocation;
     } m_chunkShader;
+
+    // ECS 
+    ECS::World* m_world;
+    ECS::EntitySystem* m_cubeRenderSystem;
+    ECS::Entity* m_testCubeEnt;
 
     // Gameplay/ World
     std::array<Entity, 512> m_entities;
