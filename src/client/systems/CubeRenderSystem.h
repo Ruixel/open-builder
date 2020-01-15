@@ -10,7 +10,14 @@
 
 #include <iostream>
 
-class CubeRenderSystem : public ECS::EntitySystem
+struct RenderEvent
+{
+	ECS_DECLARE_TYPE;
+};
+ECS_DEFINE_TYPE(RenderEvent);
+
+class CubeRenderSystem : public ECS::EntitySystem,
+	public ECS::EventSubscriber<RenderEvent>
 {
 public:
 	CubeRenderSystem(gl::VertexArray* cube, gl::UniformLocation modelLocation) {
@@ -20,7 +27,17 @@ public:
 		m_errorTexture.create("skins/error");
 	}
 
-	virtual void tick(ECS::World* world, float deltaTime) override {
+	// Make this system respond to the Render event
+	virtual void configure(ECS::World* world) override {
+		world->subscribe<RenderEvent>(this);
+	}
+
+	virtual void unconfigure(ECS::World* world) override {
+		world->unsubscribeAll(this);
+	}
+	
+	// Draw cube on render request
+	virtual void receive(ECS::World* world, const RenderEvent& event) override {
 		// Bind cube for drawing
 		auto drawable = m_cube->getDrawable();
 		drawable.bind();
@@ -37,8 +54,8 @@ public:
 			
 			// Generate model matrix from the transform component
 			glm::mat4 modelMatrix{ 1.0f };
-			translateMatrix(modelMatrix,
-				{ transform->position.x, transform->position.y, transform->position.z });
+			translateMatrix(modelMatrix, transform->position);
+			rotateMatrix(modelMatrix, transform->rotation);
 
 			// Load matrix into shader
 			gl::loadUniform(m_shaderModelLocation, modelMatrix);
