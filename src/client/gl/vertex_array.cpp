@@ -11,7 +11,8 @@ GLuint genVbo()
     return vertexBuffer;
 }
 
-template <typename T> void bufferData(const std::vector<T> &data)
+template <typename T>
+void bufferData(const std::vector<T> &data)
 {
     glCheck(glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(T), data.data(),
                          GL_STATIC_DRAW));
@@ -30,10 +31,10 @@ Drawable::Drawable(GLuint vao, GLsizei indices)
 {
 }
 
-void Drawable::bindAndDraw() const
+void Drawable::bindAndDraw(GLenum drawMode) const
 {
     bind();
-    draw();
+    draw(drawMode);
 }
 
 void Drawable::bind() const
@@ -41,24 +42,51 @@ void Drawable::bind() const
     glCheck(glBindVertexArray(m_handle));
 }
 
-void Drawable::draw() const
+void Drawable::draw(GLenum drawMode) const
 {
-    glCheck(
-        glDrawElements(GL_TRIANGLES, m_indicesCount, GL_UNSIGNED_INT, nullptr));
+    glCheck(glDrawElements(drawMode, m_indicesCount, GL_UNSIGNED_INT, nullptr));
+}
+
+//
+//  Vertex array
+//
+VertexArray::VertexArray()
+{
+    glCheck(glGenVertexArrays(1, &m_handle));
+}
+
+VertexArray::~VertexArray()
+{
+    destroy();
+}
+
+VertexArray::VertexArray(VertexArray &&other)
+{
+    *this = std::move(other);
+}
+
+VertexArray &VertexArray::operator=(VertexArray &&other)
+{
+    destroy();
+    m_bufferObjects = std::move(other.m_bufferObjects);
+    m_handle = other.m_handle;
+    m_indicesCount = other.m_indicesCount;
+    other.reset();
+    return *this;
 }
 
 void VertexArray::create()
 {
-    glCheck(glGenVertexArrays(1, &m_handle));
+    if (!m_handle) {
+        glCheck(glGenVertexArrays(1, &m_handle));
+    }
 }
 
 void VertexArray::destroy()
 {
     glCheck(glDeleteVertexArrays(1, &m_handle));
     glCheck(glDeleteBuffers(m_bufferObjects.size(), m_bufferObjects.data()));
-    m_bufferObjects.clear();
-    m_handle = 0;
-    m_indicesCount = 0;
+    reset();
 }
 
 void VertexArray::bind() const
@@ -107,6 +135,13 @@ void VertexArray::addIndexBuffer(const std::vector<GLuint> &indices)
 
     m_bufferObjects.push_back(elementBuffer);
     m_indicesCount = indices.size();
+}
+
+void VertexArray::reset()
+{
+    m_bufferObjects.clear();
+    m_handle = 0;
+    m_indicesCount = 0;
 }
 
 } // namespace gl

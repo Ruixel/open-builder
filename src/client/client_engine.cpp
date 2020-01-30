@@ -50,6 +50,7 @@ EngineStatus runClientEngine(const ClientConfig &config)
     glCheck(glEnable(GL_CULL_FACE));
     glCheck(glCullFace(GL_BACK));
     glCheck(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
+    initGLDebug();
 
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
@@ -79,7 +80,7 @@ EngineStatus runClientEngine(const ClientConfig &config)
 
         // Render
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        gameClient.render();
+        gameClient.render(window.width, window.height);
         window.window.display();
 
         // Stats and stuff

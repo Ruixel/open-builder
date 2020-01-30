@@ -4,23 +4,21 @@
 #include "gl/shader.h"
 #include "gl/textures.h"
 #include "gl/vertex_array.h"
+#include "gui/gui.h"
 #include "maths.h"
 #include "world/chunk_mesh.h"
 #include <SFML/Network/Packet.hpp>
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
 #include <SFML/Window/Window.hpp>
+#include <common/network/command_dispatcher.h>
 #include <common/network/enet.h>
 #include <common/network/net_host.h>
 #include <common/network/net_types.h>
-#include <common/world/chunk_manager.h>
-#include <common/world/voxel_registry.h>
-#include <unordered_set>
 #include <common/scripting/script_engine.h>
-#include "gui/gui.h"
-
-#include "world/client_voxel.h"
-#include <common/world/voxel_types.h>
+#include <common/world/chunk_manager.h>
+#include <common/world/voxel_data.h>
+#include <unordered_set>
 
 class Keyboard;
 
@@ -54,7 +52,7 @@ class Client final : public NetworkHost {
     void onMouseRelease(sf::Mouse::Button button, int x, int y);
 
     void update(float dt);
-    void render();
+    void render(int width, int height);
     void endGame();
 
     EngineStatus currentStatus() const;
@@ -87,12 +85,15 @@ class Client final : public NetworkHost {
 
     // Network
     ENetPeer *mp_serverPeer = nullptr;
+    CommandDispatcher<Client, ClientCommand> m_commandDispatcher;
     bool m_hasReceivedGameData = false;
 
     // Rendering/ OpenGL stuff
     glm::mat4 m_projectionMatrix{1.0f};
 
     gl::VertexArray m_cube;
+
+    gl::VertexArray m_selectionBox;
 
     gl::Texture2d m_errorSkinTexture;
     sf::Image m_rawPlayerSkin;
@@ -113,6 +114,12 @@ class Client final : public NetworkHost {
 
     struct {
         gl::Shader program;
+        gl::UniformLocation modelLocation;
+        gl::UniformLocation projectionViewLocation;
+    } m_selectionShader;
+
+    struct {
+        gl::Shader program;
         gl::UniformLocation projectionViewLocation;
         gl::UniformLocation timeLocation;
     } m_fluidShader;
@@ -122,6 +129,9 @@ class Client final : public NetworkHost {
 
     // Gameplay/ World
     std::array<Entity, 512> m_entities;
+
+    BlockPosition m_currentSelectedBlockPos;
+    bool m_blockSelected;
 
     Entity *mp_player = nullptr;
     Entity m_externalCamera;
@@ -135,12 +145,12 @@ class Client final : public NetworkHost {
         std::vector<BlockUpdate> blockUpdates;
     } m_chunks;
 
-    VoxelRegistry<ClientVoxel> m_voxelData;
+    VoxelDataManager m_voxelData;
 
     // Lua
     ScriptEngine m_lua;
 
-    //GUI
+    // GUI
     Gui m_gui;
 
     // Engine-y stuff

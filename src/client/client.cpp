@@ -38,24 +38,60 @@ void deleteChunkRenderable(const ChunkPosition &position,
         drawables.pop_back();
     }
 }
+
+void renderChunks(const std::vector<ChunkDrawable> &chunks,
+                  const ViewFrustum &frustum)
+{
+    for (const auto &chunk : chunks) {
+        if (frustum.chunkIsInFrustum(chunk.position)) {
+            chunk.vao.getDrawable().bindAndDraw();
+        }
+    }
+}
+
+bool isVoxelSelectable(VoxelType voxelType)
+{
+    return voxelType == VoxelType::Solid || voxelType == VoxelType::Flora;
+}
 } // namespace
 
 Client::Client()
     : NetworkHost("Client")
 {
-    auto luaGuiAPI = m_lua.addTable("gui");
-    luaGuiAPI["addImage"] = [&](const GuiImage &img) { m_gui.addImage(img); };
+    // clang-format off
+    m_commandDispatcher.addCommand(ClientCommand::BlockUpdate, &Client::onBlockUpdate);
+    m_commandDispatcher.addCommand(ClientCommand::ChunkData, &Client::onChunkData);
+    m_commandDispatcher.addCommand(ClientCommand::GameRegistryData, &Client::onGameRegistryData);
+    m_commandDispatcher.addCommand(ClientCommand::PlayerJoin, &Client::onPlayerJoin);
+    m_commandDispatcher.addCommand(ClientCommand::PlayerLeave, &Client::onPlayerLeave);
+    m_commandDispatcher.addCommand(ClientCommand::Snapshot, &Client::onSnapshot);
+    m_commandDispatcher.addCommand(ClientCommand::SpawnPoint, &Client::onSpawnPoint);
+    m_commandDispatcher.addCommand(ClientCommand::NewPlayerSkin, &Client::onPlayerSkinReceive);
+    // clang-format on
 
-    auto guiImage = luaGuiAPI.new_usertype<GuiImage>("Image");
-    guiImage["setSource"] = &GuiImage::setSource;
+    auto luaGuiAPI = m_lua.addTable("GUI");
+    luaGuiAPI["addImage"] = [&](sol::userdata img) { m_gui.addImage(img); };
 
-    m_lua.runLuaScript("game/gui.lua");
+    m_gui.addUsertypes(luaGuiAPI);
+
+    m_lua.lua["update"] = 3;
+    m_lua.runLuaFile("game/client/main.lua");
 }
 
 bool Client::init(const ClientConfig &config, float aspect)
 {
     // OpenGL stuff
     m_cube = makeCubeVertexArray(1, 2, 1);
+
+    m_selectionBox = makeWireCubeVertexArray(1, 1, 1);
+
+    // Selection box shader
+    m_selectionShader.program.create("selection", "selection");
+    m_selectionShader.program.bind();
+    m_selectionShader.modelLocation =
+        m_selectionShader.program.getUniformLocation("modelMatrix");
+    m_selectionShader.projectionViewLocation =
+        m_selectionShader.program.getUniformLocation("projectionViewMatrix");
 
     // Basic shader
     m_basicShader.program.create("static", "static");
@@ -167,7 +203,9 @@ void Client::onMouseRelease(sf::Mouse::Button button, [[maybe_unused]] int x,
     // Step the ray until it hits a block/ reaches maximum length
     for (; ray.getLength() < 8; ray.step()) {
         auto rayBlockPosition = toBlockPosition(ray.getEndpoint());
-        if (m_chunks.manager.getBlock(rayBlockPosition) > 0) {
+        auto &voxel = m_voxelData.getVoxelData(
+            m_chunks.manager.getBlock(rayBlockPosition));
+        if (isVoxelSelectable(voxel.type)) {
             BlockUpdate blockUpdate;
             blockUpdate.block = button == sf::Mouse::Left ? 0 : 1;
             blockUpdate.position = button == sf::Mouse::Left
@@ -309,9 +347,30 @@ void Client::update(float dt)
             }
         }
     }
+
+    m_blockSelected = false;
+    Ray ray(mp_player->position, mp_player->rotation);
+
+    for (; ray.getLength() < 8; ray.step()) {
+        auto rayBlockPosition = toBlockPosition(ray.getEndpoint());
+        auto &voxel = m_voxelData.getVoxelData(
+            m_chunks.manager.getBlock(rayBlockPosition));
+        if (isVoxelSelectable(voxel.type)) {
+            m_currentSelectedBlockPos = rayBlockPosition;
+            m_blockSelected = true;
+            break;
+        }
+    }
+
+    // Call update function on the GUI script
+    // Note: This part is quite dangerous, if there's no update() or there's an
+    // error
+    //       in the script then it will cause a crash
+    // sol::function p_update = m_lua.lua["update"];
+    // p_update(dt);
 }
 
-void Client::render()
+void Client::render(int width, int height)
 {
     // TODO [Hopson] Clean this up
     if (!m_hasReceivedGameData) {
@@ -367,15 +426,30 @@ void Client::render()
     }
     m_chunks.bufferables.clear();
 
-    // TODO [Hopson] -> DRY this code VVVV
     // Render solid chunk blocks
     m_chunkShader.program.bind();
     gl::loadUniform(m_chunkShader.projectionViewLocation, playerProjectionView);
 
-    for (const auto &chunk : m_chunks.drawables) {
-        if (m_frustum.chunkIsInFrustum(chunk.position)) {
-            chunk.vao.getDrawable().bindAndDraw();
-        }
+    renderChunks(m_chunks.drawables, m_frustum);
+
+    glCheck(glEnable(GL_BLEND));
+
+    // Render selection box
+    if (m_blockSelected) {
+        glCheck(glEnable(GL_LINE_SMOOTH));
+        glCheck(glLineWidth(2.0));
+        m_selectionShader.program.bind();
+        glm::mat4 modelMatrix{1.0};
+        float size = 1.005;
+        translateMatrix(modelMatrix,
+                        {m_currentSelectedBlockPos.x - (size - 1) / 2,
+                         m_currentSelectedBlockPos.y - (size - 1) / 2,
+                         m_currentSelectedBlockPos.z - (size - 1) / 2});
+        scaleMatrix(modelMatrix, size);
+        gl::loadUniform(m_selectionShader.modelLocation, modelMatrix);
+        gl::loadUniform(m_selectionShader.projectionViewLocation,
+                        playerProjectionView);
+        m_selectionBox.getDrawable().bindAndDraw(GL_LINES);
     }
 
     // Render fluid mesh
@@ -383,41 +457,19 @@ void Client::render()
     gl::loadUniform(m_fluidShader.timeLocation,
                     m_clock.getElapsedTime().asSeconds());
     gl::loadUniform(m_fluidShader.projectionViewLocation, playerProjectionView);
-
-    glCheck(glEnable(GL_BLEND));
-    for (const auto &chunk : m_chunks.fluidDrawables) {
-        if (m_frustum.chunkIsInFrustum(chunk.position)) {
-            chunk.vao.getDrawable().bindAndDraw();
-        }
+    if (m_chunks.manager.getBlock(toBlockPosition(mp_player->position)) == 4) {
+        glCheck(glCullFace(GL_FRONT));
     }
+    renderChunks(m_chunks.fluidDrawables, m_frustum);
     glCheck(glDisable(GL_BLEND));
+    glCheck(glCullFace(GL_BACK));
 
     // GUI
-    m_gui.render();
+    m_gui.render(width, height);
 }
 
 void Client::endGame()
 {
-    // Destroy all player skins
-    for (auto &ent : m_entities) {
-        if (ent.playerSkin.textureExists()) {
-            ent.playerSkin.destroy();
-        }
-    }
-    m_errorSkinTexture.destroy();
-
-    m_cube.destroy();
-    m_basicShader.program.destroy();
-    m_chunkShader.program.destroy();
-    m_fluidShader.program.destroy();
-    m_voxelTextures.destroy();
-
-    for (auto &chunk : m_chunks.drawables) {
-        chunk.vao.destroy();
-    }
-    for (auto &chunk : m_chunks.fluidDrawables) {
-        chunk.vao.destroy();
-    }
     NetworkHost::disconnectFromPeer(mp_serverPeer);
 }
 

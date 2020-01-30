@@ -4,22 +4,6 @@
 #include <common/world/chunk.h>
 #include <thread>
 
-namespace {
-Chunk::CompressedBlocks getCompressedChunkFromPacket(sf::Packet &packet)
-{
-    u32 size;
-    Chunk::CompressedBlocks compressed;
-    packet >> size;
-    for (u32 i = 0; i < size; i++) {
-        block_t type;
-        u16 count;
-        packet >> type >> count;
-        compressed.emplace_back(type, count);
-    }
-    return compressed;
-}
-} // namespace
-
 void Client::sendPlayerPosition(const glm::vec3 &position)
 {
     sf::Packet packet;
@@ -68,42 +52,7 @@ void Client::onPeerTimeout([[maybe_unused]] ENetPeer *peer)
 void Client::onCommandRecieve([[maybe_unused]] ENetPeer *peer,
                               sf::Packet &packet, command_t command)
 {
-    switch (static_cast<ClientCommand>(command)) {
-        case ClientCommand::PlayerJoin:
-            onPlayerJoin(packet);
-            break;
-
-        case ClientCommand::PlayerLeave:
-            onPlayerLeave(packet);
-            break;
-
-        case ClientCommand::Snapshot:
-            onSnapshot(packet);
-            break;
-
-        case ClientCommand::ChunkData:
-            onChunkData(packet);
-            break;
-
-        case ClientCommand::SpawnPoint:
-            onSpawnPoint(packet);
-            break;
-
-        case ClientCommand::BlockUpdate:
-            onBlockUpdate(packet);
-            break;
-
-        case ClientCommand::NewPlayerSkin:
-            onPlayerSkinReceive(packet);
-            break;
-
-        case ClientCommand::GameRegistryData:
-            onGameRegistryData(packet);
-            break;
-
-        case ClientCommand::PeerId:
-            break;
-    }
+    m_commandDispatcher.execute(*this, command, packet);
 }
 
 void Client::onPlayerJoin(sf::Packet &packet)
@@ -150,9 +99,18 @@ void Client::onChunkData(sf::Packet &packet)
 
         Chunk &chunk = m_chunks.manager.addChunk(position);
 
+        u32 size;
+        CompressedBlocks compressed;
+        packet >> size;
+        for (u32 i = 0; i < size; i++) {
+            block_t type;
+            u16 count;
+            packet >> type >> count;
+            compressed.emplace_back(type, count);
+        }
+
         // Uncompress the block data
-        auto compressedData = getCompressedChunkFromPacket(packet);
-        chunk.decompress(compressedData);
+        chunk.blocks = decompressBlockData(compressed);
 
         // Add to chunk updates
         m_chunks.updates.push_back(position);
@@ -226,7 +184,7 @@ void Client::onGameRegistryData(sf::Packet &packet)
         std::string textureBottom;
 
         u8 meshStyle = 0;
-        u8 meshType = 0;
+        u8 type = 0;
         u8 isCollidable = 0;
 
         packet >> name;
@@ -234,18 +192,17 @@ void Client::onGameRegistryData(sf::Packet &packet)
         packet >> textureSide;
         packet >> textureBottom;
         packet >> meshStyle;
-        packet >> meshType;
+        packet >> type;
         packet >> isCollidable;
 
-        ClientVoxel voxelData;
-        voxelData.id = m_voxelData.getNextId();
+        VoxelData voxelData;
         voxelData.name = name;
-        voxelData.topTexture = getTexture(texturePath + textureTop);
-        voxelData.sideTexture = getTexture(texturePath + textureSide);
-        voxelData.bottomTexture = getTexture(texturePath + textureBottom);
+        voxelData.topTextureId = getTexture(texturePath + textureTop);
+        voxelData.sideTextureId = getTexture(texturePath + textureSide);
+        voxelData.bottomTextureId = getTexture(texturePath + textureBottom);
 
         voxelData.meshStyle = static_cast<VoxelMeshStyle>(meshStyle);
-        voxelData.meshType = static_cast<VoxelType>(meshType);
+        voxelData.type = static_cast<VoxelType>(type);
         voxelData.isCollidable = isCollidable;
 
         m_voxelData.addVoxelData(voxelData);
