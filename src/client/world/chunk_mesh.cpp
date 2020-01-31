@@ -9,10 +9,12 @@ ChunkMesh::ChunkMesh(const ChunkPosition &chunkPosition)
     textureCoords.reserve(CHUNK_VOLUME * 2);
     indices.reserve(CHUNK_VOLUME * 2);
     cardinalLights.reserve(CHUNK_VOLUME * 2);
+    ao.reserve(CHUNK_VOLUME * 2);
 }
 
 void ChunkMesh::addFace(const MeshFace &face,
-                        const BlockPosition &blockPosition, int texture)
+                        const BlockPosition &blockPosition, int texture, 
+                        std::array<float, 4> aoAlpha)
 {
     int index = 0;
     for (int i = 0; i < 4; i++) {
@@ -22,6 +24,7 @@ void ChunkMesh::addFace(const MeshFace &face,
                            blockPosition.y);
         vertices.push_back(face.vertices[index++] + position.z * CHUNK_SIZE +
                            blockPosition.z);
+        ao.push_back(aoAlpha.at(i));
         cardinalLights.push_back(face.lightLevel);
     }
     textureCoords.insert(textureCoords.end(),
@@ -45,6 +48,7 @@ gl::VertexArray ChunkMesh::createBuffer()
     vao.addVertexBuffer(3, vertices);
     vao.addVertexBuffer(3, textureCoords);
     vao.addVertexBuffer(1, cardinalLights);
+    vao.addVertexBuffer(1, ao);
     vao.addIndexBuffer(indices);
 
     return vao;

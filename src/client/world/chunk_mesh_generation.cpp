@@ -24,6 +24,18 @@ bool makeFace(const VoxelDataManager &voxelData, block_t thisId,
            thisBlock.id != compareBlock.id;
 }
 
+float getAO(const VoxelDataManager& voxelData, block_t topLeftId, 
+    block_t topDiagonalId, block_t topRightId) {
+    int sum = 0;
+
+    sum += voxelData.getVoxelData(topLeftId).type == VoxelType::Solid;
+    sum += voxelData.getVoxelData(topDiagonalId).type == VoxelType::Solid;
+    sum += voxelData.getVoxelData(topRightId).type == VoxelType::Solid;
+
+    // Calculate transparency in mesh
+    return 1 - (sum / 5.f);
+}
+
 } // namespace
 
 ChunkMeshCollection makeChunkMesh(const Chunk &chunk,
@@ -45,46 +57,70 @@ ChunkMeshCollection makeChunkMesh(const Chunk &chunk,
                                           ? &meshes.blockMesh
                                           : &meshes.fluidMesh;
 
+                    std::vector<block_t> surroundingBlocks(26);
+                    //for 
+
                     // Left block face
                     if (makeFace(voxelData, voxel,
                                  chunk.getBlock({x - 1, y, z}))) {
                         mesh->addFace(LEFT_FACE, blockPosition,
-                                      voxData.sideTextureId);
+                                      voxData.sideTextureId, { 1, 1, 1, 1 });
                     }
 
                     // Right chunk face
                     if (makeFace(voxelData, voxel,
                                  chunk.getBlock({x + 1, y, z}))) {
                         mesh->addFace(RIGHT_FACE, blockPosition,
-                                      voxData.sideTextureId);
+                                      voxData.sideTextureId, { 1, 1, 1, 1 });
                     }
 
                     // Front chunk face
                     if (makeFace(voxelData, voxel,
                                  chunk.getBlock({x, y, z + 1}))) {
                         mesh->addFace(FRONT_FACE, blockPosition,
-                                      voxData.sideTextureId);
+                                      voxData.sideTextureId, { 1, 1, 1, 1 });
                     }
 
                     // Back chunk face
                     if (makeFace(voxelData, voxel,
                                  chunk.getBlock({x, y, z - 1}))) {
                         mesh->addFace(BACK_FACE, blockPosition,
-                                      voxData.sideTextureId);
+                                      voxData.sideTextureId, { 1, 1, 1, 1 });
                     }
 
                     // Bottom chunk face
                     if (makeFace(voxelData, voxel,
                                  chunk.getBlock({x, y - 1, z}))) {
                         mesh->addFace(BOTTOM_FACE, blockPosition,
-                                      voxData.bottomTextureId);
+                                      voxData.bottomTextureId, { 1, 1, 1, 1 });
                     }
 
                     // Top chunk face
                     if (makeFace(voxelData, voxel,
-                                 chunk.getBlock({x, y + 1, z}))) {
+                        chunk.getBlock({ x, y + 1, z }))) {
+
+                        auto voxeltL = chunk.getBlock(BlockPosition(x + 1, y + 1, z));
+                        auto voxeltR = chunk.getBlock(BlockPosition(x, y + 1, z + 1));
+                        auto voxeltD1 = chunk.getBlock(BlockPosition(x + 1, y + 1, z + 1));
+                        float aoAlpha1 = getAO(voxelData, voxeltL, voxeltR, voxeltD1);
+
+                        auto voxeltL2 = chunk.getBlock(BlockPosition(x - 1, y + 1, z));
+                        auto voxeltR2 = chunk.getBlock(BlockPosition(x, y + 1, z + 1));
+                        auto voxeltD2 = chunk.getBlock(BlockPosition(x - 1, y + 1, z + 1));
+                        float aoAlpha2 = getAO(voxelData, voxeltL2, voxeltR2, voxeltD2);
+
+                        auto voxeltL3 = chunk.getBlock(BlockPosition(x + 1, y + 1, z));
+                        auto voxeltR3 = chunk.getBlock(BlockPosition(x, y + 1, z - 1));
+                        auto voxeltD3 = chunk.getBlock(BlockPosition(x + 1, y + 1, z - 1));
+                        float aoAlpha3 = getAO(voxelData, voxeltL3, voxeltR3, voxeltD3);
+
+                        auto voxeltL4 = chunk.getBlock(BlockPosition(x - 1, y + 1, z));
+                        auto voxeltR4 = chunk.getBlock(BlockPosition(x, y + 1, z - 1));
+                        auto voxeltD4 = chunk.getBlock(BlockPosition(x - 1, y + 1, z - 1));
+                        float aoAlpha4 = getAO(voxelData, voxeltL4, voxeltR4, voxeltD4);
+
                         mesh->addFace(TOP_FACE, blockPosition,
-                                      voxData.topTextureId);
+                            voxData.topTextureId, { aoAlpha3, aoAlpha4, aoAlpha2, aoAlpha1 });
                     }
                 }
             }
