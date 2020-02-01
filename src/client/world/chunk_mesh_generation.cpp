@@ -36,6 +36,10 @@ float getAO(const VoxelDataManager& voxelData, block_t topLeftId,
     return 1 - (sum / 5.f);
 }
 
+inline float ao(int sBlock1, int sBlock2, int sBlock3) {
+    return 1 - (sBlock1 + sBlock2 + sBlock3) / 5.f;
+}
+
 } // namespace
 
 ChunkMeshCollection makeChunkMesh(const Chunk &chunk,
@@ -43,6 +47,10 @@ ChunkMeshCollection makeChunkMesh(const Chunk &chunk,
 {
     sf::Clock clock;
     ChunkMeshCollection meshes(chunk.getPosition());
+
+    // For AO
+    std::array<int, 27> surroundingBlocks;
+    int counter;
 
     for (int y = 0; y < CHUNK_SIZE; y++) {
         for (int z = 0; z < CHUNK_SIZE; z++) {
@@ -57,8 +65,15 @@ ChunkMeshCollection makeChunkMesh(const Chunk &chunk,
                                           ? &meshes.blockMesh
                                           : &meshes.fluidMesh;
 
-                    std::vector<block_t> surroundingBlocks(26);
-                    //for 
+                    counter = 0;
+                    for (int sy = -1; sy <= 1; sy++) {
+                        for (int sx = -1; sx <= 1; sx++) {
+                            for (int sz = -1; sz <= 1; sz++) {
+                                auto nearBlock = chunk.getBlock(BlockPosition(x + sx, y + sy, z + sz));
+                                surroundingBlocks.at(counter++) = voxelData.getVoxelData(nearBlock).type == VoxelType::Solid;
+                            }
+                        }
+                    }
 
                     // Left block face
                     if (makeFace(voxelData, voxel,
@@ -99,7 +114,7 @@ ChunkMeshCollection makeChunkMesh(const Chunk &chunk,
                     if (makeFace(voxelData, voxel,
                         chunk.getBlock({ x, y + 1, z }))) {
 
-                        auto voxeltL = chunk.getBlock(BlockPosition(x + 1, y + 1, z));
+                        /*auto voxeltL = chunk.getBlock(BlockPosition(x + 1, y + 1, z));
                         auto voxeltR = chunk.getBlock(BlockPosition(x, y + 1, z + 1));
                         auto voxeltD1 = chunk.getBlock(BlockPosition(x + 1, y + 1, z + 1));
                         float aoAlpha1 = getAO(voxelData, voxeltL, voxeltR, voxeltD1);
@@ -117,10 +132,15 @@ ChunkMeshCollection makeChunkMesh(const Chunk &chunk,
                         auto voxeltL4 = chunk.getBlock(BlockPosition(x - 1, y + 1, z));
                         auto voxeltR4 = chunk.getBlock(BlockPosition(x, y + 1, z - 1));
                         auto voxeltD4 = chunk.getBlock(BlockPosition(x - 1, y + 1, z - 1));
-                        float aoAlpha4 = getAO(voxelData, voxeltL4, voxeltR4, voxeltD4);
+                        float aoAlpha4 = getAO(voxelData, voxeltL4, voxeltR4, voxeltD4);*/
+
+                        float aoAlpha1 = ao(surroundingBlocks[19], surroundingBlocks[20], surroundingBlocks[23]);
+                        float aoAlpha2 = ao(surroundingBlocks[21], surroundingBlocks[18], surroundingBlocks[19]);
+                        float aoAlpha3 = ao(surroundingBlocks[25], surroundingBlocks[24], surroundingBlocks[21]);
+                        float aoAlpha4 = ao(surroundingBlocks[23], surroundingBlocks[26], surroundingBlocks[25]);
 
                         mesh->addFace(TOP_FACE, blockPosition,
-                            voxData.topTextureId, { aoAlpha3, aoAlpha4, aoAlpha2, aoAlpha1 });
+                            voxData.topTextureId, { aoAlpha3, aoAlpha2, aoAlpha1, aoAlpha4 });
                     }
                 }
             }
