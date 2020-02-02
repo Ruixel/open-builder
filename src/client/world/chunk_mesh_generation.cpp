@@ -106,34 +106,18 @@ ChunkMeshCollection makeChunkMesh(const Chunk &chunk,
                     // Bottom chunk face
                     if (makeFace(voxelData, voxel,
                                  chunk.getBlock({x, y - 1, z}))) {
+                        float aoAlpha1 = ao(surroundingBlocks[1], surroundingBlocks[2], surroundingBlocks[5]);
+                        float aoAlpha2 = ao(surroundingBlocks[3], surroundingBlocks[0], surroundingBlocks[1]);
+                        float aoAlpha3 = ao(surroundingBlocks[7], surroundingBlocks[6], surroundingBlocks[3]);
+                        float aoAlpha4 = ao(surroundingBlocks[5], surroundingBlocks[8], surroundingBlocks[7]);
+
                         mesh->addFace(BOTTOM_FACE, blockPosition,
-                                      voxData.bottomTextureId, { 1, 1, 1, 1 });
+                                      voxData.bottomTextureId, { aoAlpha2, aoAlpha3, aoAlpha4, aoAlpha1 });
                     }
 
                     // Top chunk face
                     if (makeFace(voxelData, voxel,
                         chunk.getBlock({ x, y + 1, z }))) {
-
-                        /*auto voxeltL = chunk.getBlock(BlockPosition(x + 1, y + 1, z));
-                        auto voxeltR = chunk.getBlock(BlockPosition(x, y + 1, z + 1));
-                        auto voxeltD1 = chunk.getBlock(BlockPosition(x + 1, y + 1, z + 1));
-                        float aoAlpha1 = getAO(voxelData, voxeltL, voxeltR, voxeltD1);
-
-                        auto voxeltL2 = chunk.getBlock(BlockPosition(x - 1, y + 1, z));
-                        auto voxeltR2 = chunk.getBlock(BlockPosition(x, y + 1, z + 1));
-                        auto voxeltD2 = chunk.getBlock(BlockPosition(x - 1, y + 1, z + 1));
-                        float aoAlpha2 = getAO(voxelData, voxeltL2, voxeltR2, voxeltD2);
-
-                        auto voxeltL3 = chunk.getBlock(BlockPosition(x + 1, y + 1, z));
-                        auto voxeltR3 = chunk.getBlock(BlockPosition(x, y + 1, z - 1));
-                        auto voxeltD3 = chunk.getBlock(BlockPosition(x + 1, y + 1, z - 1));
-                        float aoAlpha3 = getAO(voxelData, voxeltL3, voxeltR3, voxeltD3);
-
-                        auto voxeltL4 = chunk.getBlock(BlockPosition(x - 1, y + 1, z));
-                        auto voxeltR4 = chunk.getBlock(BlockPosition(x, y + 1, z - 1));
-                        auto voxeltD4 = chunk.getBlock(BlockPosition(x - 1, y + 1, z - 1));
-                        float aoAlpha4 = getAO(voxelData, voxeltL4, voxeltR4, voxeltD4);*/
-
                         float aoAlpha1 = ao(surroundingBlocks[19], surroundingBlocks[20], surroundingBlocks[23]);
                         float aoAlpha2 = ao(surroundingBlocks[21], surroundingBlocks[18], surroundingBlocks[19]);
                         float aoAlpha3 = ao(surroundingBlocks[25], surroundingBlocks[24], surroundingBlocks[21]);
